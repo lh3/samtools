@@ -8,6 +8,12 @@
 #include "bam.h"
 #include "ksort.h"
 
+#ifdef _USE_OPENMP
+#include "omp.h"
+#include "time.h"
+#endif
+
+
 static int g_is_by_qname = 0;
 
 static inline int strnum_cmp(const char *a, const char *b)
@@ -393,6 +399,147 @@ void bam_sort_core_ext(int is_by_qname, const char *fn, const char *prefix, size
 	bam_close(fp);
 }
 
+
+
+#ifdef _USE_OPENMP
+void bam_sort_core_ext_multicore(int is_by_qname, const char *fn, const char *prefix, size_t max_mem, int is_stdout)
+{
+	int n, ret, k, i;
+	size_t mem,max_mem_per_thread,total_mem, current_mem;
+	bam_header_t *header;
+	bamFile fp;
+	bam1_t *b, **buf;
+	
+	omp_lock_t memory_lock;
+	
+	total_mem = 0;
+	
+	max_mem_per_thread = (max_mem / (omp_get_max_threads() - 1))*.75;
+
+	g_is_by_qname = is_by_qname;
+	n = k = 0; mem = 0;
+	//Initialize openMP lock
+	 omp_init_lock(&memory_lock);
+	
+	fp = strcmp(fn, "-")? bam_open(fn, "r") : bam_dopen(fileno(stdin), "r");
+	if (fp == 0) {
+		fprintf(stderr, "[bam_sort_core] fail to open file %s\n", fn);
+		return;
+	}
+	header = bam_header_read(fp);
+	buf = (bam1_t**)calloc(max_mem_per_thread / BAM_CORE_SIZE, sizeof(bam1_t*));
+	// write sub files
+
+	int realloc_buf = 0;
+	
+	#pragma omp parallel
+	{
+		//Run the reading of the bam file in a single thread
+		#pragma omp single 
+		{
+	
+			for (;;) {
+				
+				//Check the allocated memory
+				
+
+				//If we are over the max memory wait till a task has finished
+				while(current_mem > max_mem ) 
+				{
+					sleep(1);
+					current_mem = total_mem;
+				}
+				
+				//After a task has started we need to allocate a new buf
+				if(realloc_buf == 1) {
+					buf = (bam1_t**)calloc(max_mem_per_thread / BAM_CORE_SIZE, sizeof(bam1_t*));
+					mem += (max_mem_per_thread / BAM_CORE_SIZE) * sizeof(bam1_t*);
+					realloc_buf = 0;
+				}
+				
+				buf[k] = (bam1_t*)calloc(1, sizeof(bam1_t));
+				b = buf[k];
+				if ((ret = bam_read1(fp, b)) < 0) break;
+				mem += ret;
+	
+				++k;
+				if (mem >= max_mem_per_thread) {
+					omp_set_lock(&memory_lock);
+						total_mem += mem;
+						current_mem = total_mem;
+					omp_unset_lock(&memory_lock);
+					
+					//Start task and create copies of n,buf,k,mem and intialize them to current values
+					#pragma omp task firstprivate(n,buf,k,mem) 
+					{
+						int m;
+						sort_blocks(n, k, buf, prefix, header, 0);
+						for (m = 0; m < max_mem_per_thread / BAM_CORE_SIZE; ++m) {
+							if (buf[m]) {
+								free(buf[m]->data);
+								free(buf[m]);
+							}
+						}
+						free(buf);
+	
+						omp_set_lock(&memory_lock);
+							total_mem -= mem;
+						omp_unset_lock(&memory_lock);
+						
+					}
+					realloc_buf = 1;
+					n++;
+					mem = 0; k = 0;
+				}
+			}
+			
+			//Sort the remaining blocks
+			if(n != 0) {
+				sort_blocks(n++, k, buf, prefix, header, 0);
+			}
+			
+			//Wait for all the remaining task to complete
+			#pragma omp taskwait
+		}	
+		
+	}
+	
+	if (ret != -1)
+		fprintf(stderr, "[bam_sort_core] truncated file. Continue anyway.\n");
+	if (n == 0) sort_blocks(-1, k, buf, prefix, header, is_stdout);
+	else { // then merge
+		char **fns, *fnout;
+		fprintf(stderr, "[bam_sort_core] merging from %d files...\n", n+1);
+		
+		fnout = (char*)calloc(strlen(prefix) + 20, 1);
+		if (is_stdout) sprintf(fnout, "-");
+		else sprintf(fnout, "%s.bam", prefix);
+		fns = (char**)calloc(n, sizeof(char*));
+		for (i = 0; i < n; ++i) {
+			fns[i] = (char*)calloc(strlen(prefix) + 20, 1);
+			sprintf(fns[i], "%s.%.4d.bam", prefix, i);
+		}
+		bam_merge_core(is_by_qname, fnout, 0, n, fns, 0, 0);
+		free(fnout);
+		for (i = 0; i < n; ++i) {
+			unlink(fns[i]);
+			free(fns[i]);
+		}
+		free(fns);
+	}
+	for (k = 0; k < max_mem_per_thread / BAM_CORE_SIZE; ++k) {
+		if (buf[k]) {
+			free(buf[k]->data);
+			free(buf[k]);
+		}
+	}
+	free(buf);
+	bam_header_destroy(header);
+	bam_close(fp);
+}
+
+#endif
+
 void bam_sort_core(int is_by_qname, const char *fn, const char *prefix, size_t max_mem)
 {
 	bam_sort_core_ext(is_by_qname, fn, prefix, max_mem, 0);
@@ -402,17 +549,49 @@ int bam_sort(int argc, char *argv[])
 {
 	size_t max_mem = 500000000;
 	int c, is_by_qname = 0, is_stdout = 0;
-	while ((c = getopt(argc, argv, "nom:")) >= 0) {
+	
+	int max_threads = -1;
+
+	while ((c = getopt(argc, argv, "nom:p:")) >= 0) {
 		switch (c) {
 		case 'o': is_stdout = 1; break;
 		case 'n': is_by_qname = 1; break;
 		case 'm': max_mem = atol(optarg); break;
+		case 'p': max_threads = atoi(optarg); break;
 		}
 	}
+
+
 	if (optind + 2 > argc) {
-		fprintf(stderr, "Usage: samtools sort [-on] [-m <maxMem>] <in.bam> <out.prefix>\n");
+		#ifdef _USE_OPENMP
+			fprintf(stderr, "Usage: samtools sort [-on] [-m <maxMem>] [-p <maxThreads>] <in.bam> <out.prefix>\n");
+		#else
+			fprintf(stderr, "Usage: samtools sort [-on] [-m <maxMem>] <in.bam> <out.prefix>\n");
+		#endif
 		return 1;
 	}
-	bam_sort_core_ext(is_by_qname, argv[optind], argv[optind+1], max_mem, is_stdout);
+	
+	#ifdef _USE_OPENMP
+		if(max_threads > 0) {
+			//The +1 is for the main thread
+			omp_set_num_threads( max_threads + 1 );
+		}
+		
+		if(max_threads <= 1)
+			bam_sort_core_ext(is_by_qname, argv[optind], argv[optind+1], max_mem, is_stdout);
+		else
+			bam_sort_core_ext_multicore(is_by_qname, argv[optind], argv[optind+1], max_mem, is_stdout);
+		
+	#else
+		//Without multithreading
+		if(max_threads > 0) {
+			fprintf(stderr, "[bam_sort] cannot set number of threads, not compiled with OpenMP\n");
+		}
+		
+		bam_sort_core_ext(is_by_qname, argv[optind], argv[optind+1], max_mem, is_stdout);
+		
+	#endif
+	
+
 	return 0;
 }

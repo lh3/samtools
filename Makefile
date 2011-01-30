@@ -1,4 +1,5 @@
 CC=			gcc
+CC44=		gcc44
 CFLAGS=		-g -Wall -O2 #-m64 #-arch ppc
 DFLAGS=		-D_FILE_OFFSET_BITS=64 -D_USE_KNETFILE -D_CURSES_LIB=1
 KNETFILE_O=	knetfile.o
@@ -30,6 +31,9 @@ all-recur lib-recur clean-recur cleanlocal-recur install-recur:
 		done;
 
 all:$(PROG)
+
+openmp:
+	$(MAKE) CFLAGS="$(CFLAGS) -fopenmp" DFLAGS="$(DFLAGS) -D_USE_OPENMP" CC="$(CC44)"
 
 .PHONY:all lib clean cleanlocal
 .PHONY:all-recur lib-recur clean-recur cleanlocal-recur install-recur
