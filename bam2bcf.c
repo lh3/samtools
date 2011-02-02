@@ -53,7 +53,6 @@ int bcf_call_glfgen(int _n, const bam_pileup1_t *pl, int ref_base, bcf_callaux_t
 		bca->bases = (uint16_t*)realloc(bca->bases, 2 * bca->max_bases);
 	}
 	// fill the bases array
-	memset(r, 0, sizeof(bcf_callret1_t));
 	for (i = n = 0; i < _n; ++i) {
 		const bam_pileup1_t *p = pl + i;
 		int q, b, mapQ, baseQ, is_diff, min_dist, seqQ;
@@ -99,27 +98,27 @@ int bcf_call_glfgen(int _n, const bam_pileup1_t *pl, int ref_base, bcf_callaux_t
 
 int bcf_call_combine(int n, const bcf_callret1_t *calls, int ref_base /*4-bit*/, bcf_call_t *call)
 {
-	int ref4, i, j, qsum[4];
+	int ref4, i, j, qsum[5];
 	int64_t tmp;
 	if (ref_base >= 0) {
 		call->ori_ref = ref4 = bam_nt16_nt4_table[ref_base];
 		if (ref4 > 4) ref4 = 4;
 	} else call->ori_ref = -1, ref4 = 0;
 	// calculate qsum
-	memset(qsum, 0, 4 * sizeof(int));
+	memset(qsum, 0, 5 * sizeof(int));
 	for (i = 0; i < n; ++i)
-		for (j = 0; j < 4; ++j)
+		for (j = 0; j < 5; ++j)
 			qsum[j] += calls[i].qsum[j];
-	for (j = 0; j < 4; ++j) qsum[j] = qsum[j] << 2 | j;
+	for (j = 0; j < 5; ++j) qsum[j] = qsum[j] << 2 | j;
 	// find the top 2 alleles
-	for (i = 1; i < 4; ++i) // insertion sort
+	for (i = 1; i < 5; ++i) // insertion sort
 		for (j = i; j > 0 && qsum[j] < qsum[j-1]; --j)
 			tmp = qsum[j], qsum[j] = qsum[j-1], qsum[j-1] = tmp;
 	// set the reference allele and alternative allele(s)
 	for (i = 0; i < 5; ++i) call->a[i] = -1;
 	call->unseen = -1;
 	call->a[0] = ref4;
-	for (i = 3, j = 1; i >= 0; --i) {
+	for (i = 4, j = 1; i >= 0; --i) {
 		if ((qsum[i]&3) != ref4) {
 			if (qsum[i]>>2 != 0) call->a[j++] = qsum[i]&3;
 			else break;

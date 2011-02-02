@@ -23,7 +23,7 @@ typedef struct __bcf_callaux_t {
 } bcf_callaux_t;
 
 typedef struct {
-	int depth, ori_depth, qsum[4];
+	int depth, ori_depth, qsum[5];
 	int anno[16];
 	float p[25];
 } bcf_callret1_t;
