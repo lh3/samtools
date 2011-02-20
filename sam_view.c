@@ -82,7 +82,7 @@ static int usage(int is_long_help);
 
 int main_samview(int argc, char *argv[])
 {
-	int c, is_header = 0, is_header_only = 0, is_bamin = 1, ret = 0, is_uncompressed = 0, is_bamout = 0, slx2sngr = 0, is_count = 0;
+	int c, is_header = 0, is_header_only = 0, is_bamin = 1, ret = 0, is_uncompressed = 0, is_bamout = 0, slx2sngr = 0, is_count = 0, is_mt = 1;
 	int of_type = BAM_OFDEC, is_long_help = 0;
 	int count = 0;
 	samfile_t *in = 0, *out = 0;
@@ -90,7 +90,7 @@ int main_samview(int argc, char *argv[])
 
 	/* parse command-line options */
 	strcpy(in_mode, "r"); strcpy(out_mode, "w");
-	while ((c = getopt(argc, argv, "Sbct:hHo:q:f:F:ul:r:xX?T:CR:")) >= 0) {
+	while ((c = getopt(argc, argv, "MSbct:hHo:q:f:F:ul:r:xX?T:CR:")) >= 0) {
 		switch (c) {
 		case 'c': is_count = 1; break;
 		case 'C': slx2sngr = 1; break;
@@ -111,6 +111,7 @@ int main_samview(int argc, char *argv[])
 		case 'X': of_type = BAM_OFSTR; break;
 		case '?': is_long_help = 1; break;
 		case 'T': fn_ref = strdup(optarg); is_bamin = 0; break;
+		case 'M': is_mt = 0; break;
 		default: return usage(is_long_help);
 		}
 	}
@@ -124,6 +125,7 @@ int main_samview(int argc, char *argv[])
 	if (is_bamin) strcat(in_mode, "b");
 	if (is_header) strcat(out_mode, "h");
 	if (is_uncompressed) strcat(out_mode, "u");
+	if (is_mt && is_bamout && !is_uncompressed) strcat(out_mode, "t");
 	if (argc == optind) return usage(is_long_help); // potential memory leak...
 
 	// read the list of read groups

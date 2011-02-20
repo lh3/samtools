@@ -145,7 +145,7 @@ int bam_header_write(bamFile fp, const bam_header_t *header)
 	return 0;
 }
 
-static void swap_endian_data(const bam1_core_t *c, int data_len, uint8_t *data)
+void bam_swap_endian_data(const bam1_core_t *c, int data_len, uint8_t *data)
 {
 	uint8_t *s;
 	uint32_t i, *cigar = (uint32_t*)(data + c->l_qname);
@@ -192,7 +192,7 @@ int bam_read1(bamFile fp, bam1_t *b)
 	}
 	if (bam_read(fp, b->data, b->data_len) != b->data_len) return -4;
 	b->l_aux = b->data_len - c->n_cigar * 4 - c->l_qname - c->l_qseq - (c->l_qseq+1)/2;
-	if (bam_is_be) swap_endian_data(c, b->data_len, b->data);
+	if (bam_is_be) bam_swap_endian_data(c, b->data_len, b->data);
 	return 4 + block_len;
 }
 
@@ -214,11 +214,11 @@ inline int bam_write1_core(bamFile fp, const bam1_core_t *c, int data_len, uint8
 		for (i = 0; i < 8; ++i) bam_swap_endian_4p(x + i);
 		y = block_len;
 		bam_write(fp, bam_swap_endian_4p(&y), 4);
-		swap_endian_data(c, data_len, data);
+		bam_swap_endian_data(c, data_len, data);
 	} else bam_write(fp, &block_len, 4);
 	bam_write(fp, x, BAM_CORE_SIZE);
 	bam_write(fp, data, data_len);
-	if (bam_is_be) swap_endian_data(c, data_len, data);
+	if (bam_is_be) bam_swap_endian_data(c, data_len, data);
 	return 4 + block_len;
 }
 

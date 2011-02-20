@@ -1,6 +1,9 @@
 #ifndef BAM_SAM_H
 #define BAM_SAM_H
 
+#ifdef HAVE_PTHREAD
+#include <pthread.h>
+#endif
 #include "bam.h"
 
 /*!
@@ -15,7 +18,7 @@
 
 /*! @typedef
   @abstract SAM/BAM file handler
-  @field  type    type of the handler; bit 1 for BAM, 2 for reading and bit 3-4 for flag format
+  @field  type    type of the handler; bit 1 for BAM, 2 for reading; bit 3-4 for flag format; bit 5 for threading
   @field  bam   BAM file handler; valid if (type&1) == 1
   @field  tamr  SAM file handler for reading; valid if type == 2
   @field  tamw  SAM file handler for writing; valid if type == 0
@@ -28,6 +31,11 @@ typedef struct {
 		bamFile bam;
 		FILE *tamw;
 	} x;
+#ifdef HAVE_PTHREAD
+	pthread_t tid;
+	FILE *fp[2];
+	uint8_t buf[0x10000];
+#endif
 	bam_header_t *header;
 } samfile_t;
 
