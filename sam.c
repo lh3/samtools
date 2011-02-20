@@ -72,6 +72,7 @@ static void *worker(void *data)
 	int l;
 	while ((l = fread(fp->buf, 1, 0x10000, fp->fp[0])) > 0)
 		bgzf_write(fp->x.bam, fp->buf, l);
+	fclose(fp->fp[0]);
 	return 0;
 }
 #endif
@@ -164,15 +165,15 @@ open_err_ret:
 void samclose(samfile_t *fp)
 {
 	if (fp == 0) return;
-	if (fp->header) bam_header_destroy(fp->header);
 	if (fp->type & TYPE_BAM) {
 #ifdef HAVE_PTHREAD
+		fflush(fp->fp[1]);
 		fclose(fp->fp[1]);
 		pthread_join(fp->tid, 0);
-		fclose(fp->fp[0]);
 #endif
 		bam_close(fp->x.bam);
 	} else if (fp->type & TYPE_READ) sam_close(fp->x.tamr);
+	if (fp->header) bam_header_destroy(fp->header);
 	else fclose(fp->x.tamw);
 	free(fp);
 }
