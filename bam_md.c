@@ -304,7 +304,7 @@ int bam_fillmd(int argc, char *argv[])
 		}
 	}
 	if (!is_sam_in) strcat(mode_r, "b");
-	if (is_bam_out) strcat(mode_w, "b");
+	if (is_bam_out) strcat(mode_w, "bt");
 	else strcat(mode_w, "h");
 	if (is_uncompressed) strcat(mode_w, "u");
 	if (optind + 1 >= argc) {
