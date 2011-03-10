@@ -100,6 +100,10 @@ int main() {
 #include <string.h>
 #include <limits.h>
 
+#ifdef _MSC_VER
+#include <msvc_compat.h>
+#endif
+
 /* compipler specific configuration */
 
 #if UINT_MAX == 0xffffffffu

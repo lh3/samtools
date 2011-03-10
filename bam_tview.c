@@ -4,7 +4,11 @@
 #elif _CURSES_LIB == 1
 #include <curses.h>
 #ifndef NCURSES_VERSION
+#ifdef _MSC_VER
+#pragma message ("_CURSES_LIB=1 but NCURSES_VERSION not defined; tview is NOT compiled")
+#else
 #warning "_CURSES_LIB=1 but NCURSES_VERSION not defined; tview is NOT compiled"
+#endif
 #else
 #define _HAVE_CURSES
 #endif
@@ -12,7 +16,11 @@
 #include <xcurses.h>
 #define _HAVE_CURSES
 #else
+#ifdef _MSC_VER
+#pragma message ("_CURSES_LIB is not 0, 1 or 2; tview is NOT compiled")
+#else
 #warning "_CURSES_LIB is not 0, 1 or 2; tview is NOT compiled"
+#endif
 #endif
 
 #ifdef _HAVE_CURSES
