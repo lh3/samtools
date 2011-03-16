@@ -423,7 +423,11 @@ int bam_tview_main(int argc, char *argv[])
 }
 #else // #ifdef _HAVE_CURSES
 #include <stdio.h>
+#ifdef _MSC_VER
+#pragma message ( "No curses library is available; tview is disabled." )
+#else
 #warning "No curses library is available; tview is disabled."
+#endif
 int bam_tview_main(int argc, char *argv[])
 {
 	fprintf(stderr, "[bam_tview_main] The ncurses library is unavailable; tview is not compiled.\n");

@@ -2,7 +2,9 @@
 #define ERRMOD_H
 
 #include <stdint.h>
-
+#ifdef _MSC_VER
+#include <msvc_compat.h>
+#endif
 struct __errmod_coef_t;
 
 typedef struct {
