@@ -1,4 +1,4 @@
-.TH samtools 1 "1 March 2011" "samtools-0.1.13" "Bioinformatics tools"
+.TH samtools 1 "21 April 2011" "samtools-0.1.16" "Bioinformatics tools"
 .SH NAME
 .PP
 samtools - Utilities for the Sequence Alignment/Map (SAM) format
@@ -145,7 +145,10 @@ identifiers are absent, each input file is regarded as one sample.
 
 .B OPTIONS:
 .RS
-.TP 8
+.TP 10
+.B -A
+Do not skip anomalous read pairs in variant calling.
+.TP
 .B -B
 Disable probabilistic realignment for the computation of base alignment
 quality (BAQ). BAQ is the Phred-scaled probability of a read base being
@@ -158,6 +161,14 @@ excessive mismatches. Given a read with a phred-scaled probability q of
 being generated from the mapped position, the new mapping quality is
 about sqrt((INT-q)/INT)*INT. A zero value disables this
 functionality; if enabled, the recommended value for BWA is 50. [0]
+.TP
+.BI -d \ INT
+At a position, read maximally
+.I INT
+reads per input BAM. [250]
+.TP
+.B -D
+Output per-sample read depth
 .TP
 .BI -e \ INT
 Phred-scaled gap extension sequencing error probability. Reducing
@@ -184,8 +195,16 @@ is modeled as
 .IR INT * s / l .
 [100]
 .TP
+.B -I
+Do not perform INDEL calling
+.TP
 .BI -l \ FILE
 File containing a list of sites where pileup or BCF is outputted [null]
+.TP
+.BI -L \ INT
+Skip INDEL calling if the average per-sample depth is above
+.IR INT .
+[250]
 .TP
 .BI -o \ INT
 Phred-scaled gap open sequencing error probability. Reducing
@@ -210,6 +229,9 @@ Only generate pileup in region
 .I STR
 [all sites]
 .TP
+.B -S
+Output per-sample Phred-scaled strand bias P-value
+.TP
 .B -u
 Similar to
 .B -g
@@ -226,6 +248,16 @@ with the header in
 .I in.header.sam.
 This command is much faster than replacing the header with a
 BAM->SAM->BAM conversion.
+
+.TP
+.B cat
+samtools cat [-h header.sam] [-o out.bam] <in1.bam> <in2.bam> [ ... ]
+
+Concatenate BAMs. The sequence dictionary of each input BAM must be identical,
+although this command does not check this. This command uses a similar trick
+to
+.B reheader
+which enables fast BAM concatenation.
 
 .TP
 .B sort
@@ -253,7 +285,7 @@ Approximately the maximum required memory. [500000000]
 
 .TP
 .B merge
-samtools merge [-nur] [-h inh.sam] [-R reg] <out.bam> <in1.bam> <in2.bam> [...]
+samtools merge [-nur1f] [-h inh.sam] [-R reg] <out.bam> <in1.bam> <in2.bam> [...]
 
 Merge multiple sorted alignments.
 The header reference lists of all the input BAM files, and the @SQ headers of
@@ -270,6 +302,12 @@ and the headers of other files will be ignored.
 .B OPTIONS:
 .RS
 .TP 8
+.B -1
+Use zlib compression level 1 to comrpess the output
+.TP
+.B -f
+Force to overwrite the output file if present.
+.TP 8
 .BI -h \ FILE
 Use the lines of
 .I FILE
@@ -281,16 +319,17 @@ replacing any header lines that would otherwise be copied from
 is actually in SAM format, though any alignment records it may contain
 are ignored.)
 .TP
-.BI -R \ STR
-Merge files in the specified region indicated by
-.I STR
-.TP
-.B -r
-Attach an RG tag to each alignment. The tag value is inferred from file names.
-.TP
 .B -n
 The input alignments are sorted by read names rather than by chromosomal
 coordinates
+.TP
+.BI -R \ STR
+Merge files in the specified region indicated by
+.I STR
+[null]
+.TP
+.B -r
+Attach an RG tag to each alignment. The tag value is inferred from file names.
 .TP
 .B -u
 Uncompressed BAM output

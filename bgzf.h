@@ -43,7 +43,7 @@
 typedef struct {
     int file_descriptor;
     char open_mode;  // 'r' or 'w'
-    bool owned_file, is_uncompressed;
+    int16_t owned_file, compress_level;
 #ifdef _USE_KNETFILE
 	union {
 		knetFile *fpr;
@@ -135,6 +135,7 @@ int bgzf_check_EOF(BGZF *fp);
 int bgzf_read_block(BGZF* fp);
 int bgzf_flush(BGZF* fp);
 int bgzf_flush_try(BGZF *fp, int size);
+int bgzf_check_bgzf(const char *fn);
 
 #ifdef __cplusplus
 }

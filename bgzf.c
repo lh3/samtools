@@ -115,6 +115,32 @@ report_error(BGZF* fp, const char* message) {
     fp->error = message;
 }
 
+int bgzf_check_bgzf(const char *fn)
+{
+    BGZF *fp;
+    uint8_t buf[10],magic[10]="\037\213\010\4\0\0\0\0\0\377";
+    int n;
+
+    if ((fp = bgzf_open(fn, "r")) == 0) 
+    {
+        fprintf(stderr, "[bgzf_check_bgzf] failed to open the file: %s\n",fn);
+        return -1;
+    }
+
+#ifdef _USE_KNETFILE
+    n = knet_read(fp->x.fpr, buf, 10);
+#else
+    n = fread(buf, 1, 10, fp->file);
+#endif
+    bgzf_close(fp);
+
+    if ( n!=10 ) 
+        return -1;
+
+    if ( !memcmp(magic, buf, 10) ) return 1;
+    return 0;
+}
+
 static BGZF *bgzf_read_init()
 {
 	BGZF *fp;
@@ -152,7 +178,7 @@ open_read(int fd)
 
 static
 BGZF*
-open_write(int fd, bool is_uncompressed)
+open_write(int fd, int compress_level) // compress_level==-1 for the default level
 {
     FILE* file = fdopen(fd, "w");
     BGZF* fp;
@@ -160,7 +186,9 @@ open_write(int fd, bool is_uncompressed)
 	fp = malloc(sizeof(BGZF));
     fp->file_descriptor = fd;
     fp->open_mode = 'w';
-    fp->owned_file = 0; fp->is_uncompressed = is_uncompressed;
+    fp->owned_file = 0;
+	fp->compress_level = compress_level < 0? Z_DEFAULT_COMPRESSION : compress_level; // Z_DEFAULT_COMPRESSION==-1
+	if (fp->compress_level > 9) fp->compress_level = Z_DEFAULT_COMPRESSION;
 #ifdef _USE_KNETFILE
     fp->x.fpw = file;
 #else
@@ -199,13 +227,20 @@ bgzf_open(const char* __restrict path, const char* __restrict mode)
         fp = open_read(fd);
 #endif
     } else if (strchr(mode, 'w') || strchr(mode, 'W')) {
-		int fd, oflag = O_WRONLY | O_CREAT | O_TRUNC;
+		int fd, compress_level = -1, oflag = O_WRONLY | O_CREAT | O_TRUNC;
 #ifdef _WIN32
 		oflag |= O_BINARY;
 #endif
 		fd = open(path, oflag, 0666);
 		if (fd == -1) return 0;
-        fp = open_write(fd, strchr(mode, 'u')? 1 : 0);
+		{ // set compress_level
+			int i;
+			for (i = 0; mode[i]; ++i)
+				if (mode[i] >= '0' && mode[i] <= '9') break;
+			if (mode[i]) compress_level = (int)mode[i] - '0';
+			if (strchr(mode, 'u')) compress_level = 0;
+		}
+        fp = open_write(fd, compress_level);
     }
     if (fp != NULL) fp->owned_file = 1;
     return fp;
@@ -218,7 +253,12 @@ bgzf_fdopen(int fd, const char * __restrict mode)
     if (mode[0] == 'r' || mode[0] == 'R') {
         return open_read(fd);
     } else if (mode[0] == 'w' || mode[0] == 'W') {
-        return open_write(fd, strstr(mode, "u")? 1 : 0);
+		int i, compress_level = -1;
+		for (i = 0; mode[i]; ++i)
+			if (mode[i] >= '0' && mode[i] <= '9') break;
+		if (mode[i]) compress_level = (int)mode[i] - '0';
+		if (strchr(mode, 'u')) compress_level = 0;
+        return open_write(fd, compress_level);
     } else {
         return NULL;
     }
@@ -264,7 +304,6 @@ deflate_block(BGZF* fp, int block_length)
     input_length = block_length;
     compressed_length = 0;
     while (1) {
-		int compress_level = fp->is_uncompressed? 0 : Z_DEFAULT_COMPRESSION;
         z_stream zs;
         zs.zalloc = NULL;
         zs.zfree = NULL;
@@ -273,7 +312,7 @@ deflate_block(BGZF* fp, int block_length)
         zs.next_out = (void*)&buffer[BLOCK_HEADER_LENGTH];
         zs.avail_out = buffer_size - BLOCK_HEADER_LENGTH - BLOCK_FOOTER_LENGTH;
 
-        status = deflateInit2(&zs, compress_level, Z_DEFLATED,
+        status = deflateInit2(&zs, fp->compress_level, Z_DEFLATED,
                                   GZIP_WINDOW_BITS, Z_DEFAULT_MEM_LEVEL, Z_DEFAULT_STRATEGY);
         if (status != Z_OK) {
             report_error(fp, "deflate init failed");
@@ -441,7 +480,7 @@ int
 bgzf_read_block(BGZF* fp)
 {
     bgzf_byte_t header[BLOCK_HEADER_LENGTH];
-	int count, size = 0;
+	int count, size = 0, block_length, remaining;
     int block_length;
     int remaining;
     bgzf_byte_t* compressed_block;
@@ -512,6 +551,7 @@ bgzf_read(BGZF* fp, void* data, int length)
 
     while (bytes_read < length) {
         available = fp->block_length - fp->block_offset;
+
         if (available <= 0) {
             if (bgzf_read_block(fp) != 0) {
                 return -1;
@@ -569,9 +609,8 @@ int bgzf_flush_try(BGZF *fp, int size)
 
 int bgzf_write(BGZF* fp, const void* data, int length)
 {
-	const bgzf_byte_t* input = data;
-    int block_length;
-    int bytes_written = 0;
+	const bgzf_byte_t *input = data;
+	int block_length, bytes_written;
     if (fp->open_mode != 'w') {
         report_error(fp, "file not open for writing");
         return -1;
@@ -580,7 +619,9 @@ int bgzf_write(BGZF* fp, const void* data, int length)
     if (fp->uncompressed_block == NULL)
         fp->uncompressed_block = malloc(fp->uncompressed_block_size);
 
+    input = data;
     block_length = fp->uncompressed_block_size;
+    bytes_written = 0;
     while (bytes_written < length) {
         int copy_length = bgzf_min(block_length - fp->block_offset, length - bytes_written);
         bgzf_byte_t* buffer = fp->uncompressed_block;
