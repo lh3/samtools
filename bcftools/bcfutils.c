@@ -240,7 +240,9 @@ int bcf_anno_max(bcf1_t *b)
 int bcf_shuffle(bcf1_t *b, int seed)
 {
 	int i, j, *a;
+#ifdef srand48
 	if (seed > 0) srand48(seed);
+#endif
 	a = malloc(b->n_smpl * sizeof(int));
 	for (i = 0; i < b->n_smpl; ++i) a[i] = i;
 	for (i = b->n_smpl; i > 1; --i) {

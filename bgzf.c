@@ -277,7 +277,6 @@ deflate_block(BGZF* fp, int block_length)
     
     bgzf_byte_t* buffer = fp->compressed_block;
     int buffer_size = fp->compressed_block_size;
-	int compress_level;
 	int status;
 
     // Init gzip header
@@ -381,7 +380,7 @@ inflate_block(BGZF* fp, int block_length)
 	int status;
     zs.zalloc = NULL;
     zs.zfree = NULL;
-    zs.next_in = (bgzf_byte_t *)fp->compressed_block + 18;
+    zs.next_in = (unsigned char *)fp->compressed_block + 18;
     zs.avail_in = block_length - 16;
     zs.next_out = fp->uncompressed_block;
     zs.avail_out = fp->uncompressed_block_size;
@@ -481,8 +480,6 @@ bgzf_read_block(BGZF* fp)
 {
     bgzf_byte_t header[BLOCK_HEADER_LENGTH];
 	int count, size = 0, block_length, remaining;
-    int block_length;
-    int remaining;
     bgzf_byte_t* compressed_block;
     int64_t block_address;
 #ifdef _USE_KNETFILE

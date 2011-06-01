@@ -1,5 +1,5 @@
 CC=			gcc
-CFLAGS=		-g -Wall -O2 #-m64 #-ch ppc
+CFLAGS=		-g -Wall -O2 #-m64 #-arch ppc
 DFLAGS=		-D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -D_USE_KNETFILE -D_CURSES_LIB=1
 KNETFILE_O=	knetfile.o
 LOBJS=		bgzf.o kstring.o bam_aux.o bam.o bam_import.o sam.o bam_index.o	\
@@ -76,7 +76,7 @@ libbam.1.dylib-local:$(LOBJS)
 		libtool -dynamic $(LOBJS) -o libbam.1.dylib -lc -lz
 
 libbam.so.1-local:$(LOBJS)
-		$(CC) -shed -Wl,-soname,libbam.so -o libbam.so.1 $(LOBJS) -lc -lz
+		$(CC) -shared -Wl,-soname,libbam.so -o libbam.so.1 $(LOBJS) -lc -lz
 
 dylib:
 		@$(MAKE) cleanlocal; \
