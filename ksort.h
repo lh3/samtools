@@ -54,6 +54,10 @@
 
 */
 
+#ifdef _MSC_VER
+#include "msvc_compat.h"
+#endif
+
 #ifndef AC_KSORT_H
 #define AC_KSORT_H
 

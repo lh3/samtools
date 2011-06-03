@@ -372,8 +372,13 @@ int bcfview(int argc, char *argv[])
 	if (vc.n1 <= 0) vc.n_perm = 0; // TODO: give a warning here!
 	if (vc.n_perm > 0) {
 		seeds = malloc(vc.n_perm * sizeof(int));
+#ifdef _MSC_VER
+        srand((unsigned)time( NULL ));
+		for (c = 0; c < vc.n_perm; ++c) seeds[c] = (long)rand();
+#elif defined(_MSC_VER)
 		srand48(time(0));
 		for (c = 0; c < vc.n_perm; ++c) seeds[c] = lrand48();
+#endif
 	}
 	b = calloc(1, sizeof(bcf1_t));
 	blast = calloc(1, sizeof(bcf1_t));
