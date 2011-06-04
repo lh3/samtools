@@ -363,7 +363,7 @@ deflate_block(BGZF* fp, int block_length)
             return -1;
         }
         memcpy(fp->uncompressed_block,
-               (bgzf_byte_t *)fp->uncompressed_block + input_length,
+               (unsigned char *)fp->uncompressed_block + input_length,
                remaining);
     }
     fp->block_offset = remaining;
@@ -380,7 +380,7 @@ inflate_block(BGZF* fp, int block_length)
 	int status;
     zs.zalloc = NULL;
     zs.zfree = NULL;
-    zs.next_in = (unsigned char *)fp->compressed_block + 18;
+    zs.next_in = (bgzf_byte_t *)fp->compressed_block + 18;
     zs.avail_in = block_length - 16;
     zs.next_out = fp->uncompressed_block;
     zs.avail_out = fp->uncompressed_block_size;

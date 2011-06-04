@@ -375,7 +375,7 @@ int bcfview(int argc, char *argv[])
 #ifdef _MSC_VER
         srand((unsigned)time( NULL ));
 		for (c = 0; c < vc.n_perm; ++c) seeds[c] = (long)rand();
-#elif defined(_MSC_VER)
+#else
 		srand48(time(0));
 		for (c = 0; c < vc.n_perm; ++c) seeds[c] = lrand48();
 #endif
