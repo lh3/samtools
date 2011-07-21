@@ -110,7 +110,11 @@ void bam_rmdup_core(samfile_t *in, samfile_t *out)
 			if (c->tid != last_tid) {
 				clear_best(aux, 0);
 				if (kh_size(del_set)) { // check
+#ifdef _WIN32
+					fprintf(stderr, "[bam_rmdup_core] %I64u unmatched pairs\n", (long long)kh_size(del_set));
+#else
 					fprintf(stderr, "[bam_rmdup_core] %llu unmatched pairs\n", (long long)kh_size(del_set));
+#endif
 					clear_del_set(del_set);
 				}
 				if ((int)c->tid == -1) { // append unmapped reads
@@ -160,7 +164,11 @@ void bam_rmdup_core(samfile_t *in, samfile_t *out)
 		if (kh_exist(aux, k)) {
 			lib_aux_t *q = &kh_val(aux, k);			
 			dump_best(&stack, out);
+#ifdef _WIN32
+			fprintf(stderr, "[bam_rmdup_core] %I64d / %I64d = %.4lf in library '%s'\n", (long long)q->n_removed,
+#else
 			fprintf(stderr, "[bam_rmdup_core] %lld / %lld = %.4lf in library '%s'\n", (long long)q->n_removed,
+#endif
 					(long long)q->n_checked, (double)q->n_removed/q->n_checked, kh_key(aux, k));
 			kh_destroy(pos, q->best_hash);
 			free((char*)kh_key(aux, k));

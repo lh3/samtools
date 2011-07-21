@@ -270,10 +270,9 @@ deflate_block(BGZF* fp, int block_length)
 {
     // Deflate the block in fp->uncompressed_block into fp->compressed_block.
     // Also adds an extra field that stores the compressed block length.
-	int input_length;
+	int input_length, remaining;
 	int compressed_length = 0;
 	uint32_t crc = crc32(0L, NULL, 0L);
-    int remaining = block_length - input_length;
     
     bgzf_byte_t* buffer = fp->compressed_block;
     int buffer_size = fp->compressed_block_size;
@@ -534,10 +533,9 @@ int
 bgzf_read(BGZF* fp, void* data, int length)
 {
     int bytes_read = 0;
-    bgzf_byte_t* output = data;
+    bgzf_byte_t* output;
     bgzf_byte_t* buffer;
-    int available;
-    int copy_length;
+    int available, copy_length;
     if (length <= 0) {
         return 0;
     }
@@ -546,6 +544,7 @@ bgzf_read(BGZF* fp, void* data, int length)
         return -1;
     }
 
+    output = data;
     while (bytes_read < length) {
         available = fp->block_length - fp->block_offset;
 
@@ -606,7 +605,7 @@ int bgzf_flush_try(BGZF *fp, int size)
 
 int bgzf_write(BGZF* fp, const void* data, int length)
 {
-	const bgzf_byte_t *input = data;
+	const bgzf_byte_t *input;
 	int block_length, bytes_written;
     if (fp->open_mode != 'w') {
         report_error(fp, "file not open for writing");

@@ -167,7 +167,11 @@ static inline uint8_t *alloc_data(bam1_t *b, int size)
 }
 static inline void parse_error(int64_t n_lines, const char * __restrict msg)
 {
+#if defined(_WIN32) | defined(_MSC_VER)
+	fprintf(stderr, "Parse error at line %I64d: %s\n", (long long)n_lines, msg);
+#else
 	fprintf(stderr, "Parse error at line %lld: %s\n", (long long)n_lines, msg);
+#endif
 	abort();
 }
 static inline void append_text(bam_header_t *header, kstring_t *str)
@@ -180,14 +184,16 @@ static inline void append_text(bam_header_t *header, kstring_t *str)
         header->text = (char*)realloc(header->text, y);
         if ( !header->text ) 
         {
-            fprintf(stderr,"realloc failed to alloc %ld bytes\n", y);
+            fprintf(stderr,"realloc failed to alloc %ld bytes\n", (long int)y);
             abort();
         }
     }
     // Sanity check
     if ( header->l_text+str->l+1 >= header->n_text )
     {
-        fprintf(stderr,"append_text FIXME: %ld>=%ld, x=%ld,y=%ld\n",  header->l_text+str->l+1,header->n_text,x,y);
+        fprintf(stderr,"append_text FIXME: %ld>=%ld, x=%ld,y=%ld\n",
+        		(long int)(header->l_text+str->l+1),
+        		(long int)(header->n_text), (long int)x, (long int)y);
         abort();
     }
 	strncpy(header->text + header->l_text, str->s, str->l+1); // we cannot use strcpy() here.
@@ -319,7 +325,11 @@ int sam_read1(tamFile fp, bam_header_t *header, bam1_t *b)
 			doff += c->n_cigar * 4;
 		} else {
 			if (!(c->flag&BAM_FUNMAP)) {
+#if defined(_WIN32) | defined(_MSC_VER)
+				fprintf(stderr, "Parse warning at line %I64d: mapped sequence without CIGAR\n", (long long)fp->n_lines);
+#else
 				fprintf(stderr, "Parse warning at line %lld: mapped sequence without CIGAR\n", (long long)fp->n_lines);
+#endif
 				c->flag |= BAM_FUNMAP;
 			}
 			c->bin = bam_reg2bin(c->pos, c->pos + 1);
@@ -387,7 +397,11 @@ int sam_read1(tamFile fp, bam_header_t *header, bam1_t *b)
 						*s++ = 'i'; *(int32_t*)s = (int32_t)x;
 						s += 4; doff += 5;
 						if (x < -2147483648ll)
+#if defined(_WIN32) | defined(_MSC_VER)
+							fprintf(stderr, "Parse warning at line %I64d: integer %I64d is out of range.",
+#else
 							fprintf(stderr, "Parse warning at line %lld: integer %lld is out of range.",
+#endif
 									(long long)fp->n_lines, x);
 					}
 				} else {
@@ -401,7 +415,11 @@ int sam_read1(tamFile fp, bam_header_t *header, bam1_t *b)
 						*s++ = 'I'; *(uint32_t*)s = (uint32_t)x;
 						s += 4; doff += 5;
 						if (x > 4294967295ll)
+#if defined(_WIN32) | defined(_MSC_VER)
+							fprintf(stderr, "Parse warning at line %I64d: integer %I64d is out of range.",
+#else
 							fprintf(stderr, "Parse warning at line %lld: integer %lld is out of range.",
+#endif
 									(long long)fp->n_lines, x);
 					}
 				}

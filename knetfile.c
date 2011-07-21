@@ -411,7 +411,11 @@ int khttp_connect_file(knetFile *fp)
 	fp->fd = socket_connect(fp->host, fp->port);
 	buf = calloc(0x10000, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
 	l += sprintf(buf + l, "GET %s HTTP/1.0\r\nHost: %s\r\n", fp->path, fp->http_host);
+#ifdef _WIN32
+    l += sprintf(buf + l, "Range: bytes=%I64d-\r\n", (long long)fp->offset);
+#else
     l += sprintf(buf + l, "Range: bytes=%lld-\r\n", (long long)fp->offset);
+#endif
 	l += sprintf(buf + l, "\r\n");
 	netwrite(fp->fd, buf, l);
 	l = 0;

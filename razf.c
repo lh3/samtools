@@ -269,7 +269,7 @@ static void razf_end_flush(RAZF *rz){
 	}
 }
 
-static void _razf_buffered_write(RAZF *rz, const char *data, int size){
+static void _razf_buffered_write(RAZF *rz, const void *data, int size){
 	int i, n;
 	while(1){
 		if(rz->buf_len == RZ_BUFFER_SIZE){
@@ -290,7 +290,7 @@ static void _razf_buffered_write(RAZF *rz, const char *data, int size){
 	}
 }
 
-int razf_write(RAZF* rz, const char *data, int size){
+int razf_write(RAZF* rz, const void *data, int size){
 	int ori_size, n;
 	int64_t next_block;
 	ori_size = size;
@@ -379,6 +379,7 @@ static RAZF* razf_open_r(int fd, int _load_index){
 	n = read(rz->filedes, rz->inbuf, RZ_BUFFER_SIZE);
 #endif
 	ret = _read_gz_header(rz->inbuf, n, &ext_off, &ext_len);
+
 	if(ret == 0){
 		PLAIN_FILE:
 		rz->in = n;
@@ -623,7 +624,7 @@ static int _razf_read(RAZF* rz, void *data, int size){
 	return size - rz->stream->avail_out;
 }
 
-int razf_read(RAZF *rz, char *data, int size){
+int razf_read(RAZF *rz, void *data, int size){
 	int ori_size, i;
 	ori_size = size;
 	while(size > 0){

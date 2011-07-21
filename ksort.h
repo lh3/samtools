@@ -54,15 +54,19 @@
 
 */
 
+#ifndef AC_KSORT_H
+#define AC_KSORT_H
+
 #ifdef _MSC_VER
 #include "msvc_compat.h"
 #endif
 
-#ifndef AC_KSORT_H
-#define AC_KSORT_H
-
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(_WIN32) && !defined(drand48)
+static inline double drand48() { return (double)rand() / RAND_MAX; }
+#endif
 
 typedef struct {
 	void *left, *right;

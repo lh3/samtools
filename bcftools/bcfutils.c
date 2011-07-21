@@ -5,6 +5,10 @@
 #include "khash.h"
 KHASH_MAP_INIT_STR(str2id, int)
 
+#if defined(_WIN32) && !defined(drand48)
+static inline double drand48() { return (double)rand() / RAND_MAX; }
+#endif
+
 void *bcf_build_refhash(bcf_hdr_t *h)
 {
 	khash_t(str2id) *hash;

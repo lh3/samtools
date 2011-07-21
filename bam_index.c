@@ -201,7 +201,11 @@ bam_index_t *bam_index_core(bamFile fp)
 			if (save_tid < 0) break;
 		}
 		if (bam_tell(fp) <= last_off) {
+#if defined(_WIN32) | defined(_MSC_VER)
+			fprintf(stderr, "[bam_index_core] bug in BGZF/RAZF: %I64x < %I64x\n",
+#else
 			fprintf(stderr, "[bam_index_core] bug in BGZF/RAZF: %llx < %llx\n",
+#endif
 					(unsigned long long)bam_tell(fp), (unsigned long long)last_off);
 			exit(1);
 		}
@@ -528,11 +532,19 @@ int bam_idxstats(int argc, char *argv[])
 		printf("%s\t%d", header->target_name[i], header->target_len[i]);
 		k = kh_get(i, h, BAM_MAX_BIN);
 		if (k != kh_end(h))
+#if defined(_WIN32) | defined(_MSC_VER)
+			printf("\t%I64u\t%I64u", (long long)kh_val(h, k).list[1].u, (long long)kh_val(h, k).list[1].v);
+#else
 			printf("\t%llu\t%llu", (long long)kh_val(h, k).list[1].u, (long long)kh_val(h, k).list[1].v);
+#endif
 		else printf("\t0\t0");
 		putchar('\n');
 	}
+#if defined(_WIN32) | defined(_MSC_VER)
+	printf("*\t0\t0\t%I64u\n", (long long)idx->n_no_coor);
+#else
 	printf("*\t0\t0\t%llu\n", (long long)idx->n_no_coor);
+#endif
 	bam_header_destroy(header);
 	bam_index_destroy(idx);
 	return 0;
