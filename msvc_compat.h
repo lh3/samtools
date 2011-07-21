@@ -23,8 +23,6 @@ static int isinf(double x) {
 #define alloca _alloca
 #define atoll _atoi64
 
-#define ftello ftell
-
 typedef int bool;
 
 static int R_OK = 4;

@@ -17,8 +17,9 @@ KHASH_MAP_INIT_STR(s, faidx1_t)
 #include "razf.h"
 #else
 #ifdef _WIN32
-#define ftello(fp) ftell(fp)
-#define fseeko(fp, offset, whence) fseek(fp, offset, whence)
+//assume 64-bit file pointers
+#define ftello(fp) _ftelli64(fp)
+#define fseeko(fp, offset, whence) _fseeki64(fp, offset, whence)
 #else
 extern off_t ftello(FILE *stream);
 extern int fseeko(FILE *stream, off_t offset, int whence);

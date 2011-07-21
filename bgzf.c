@@ -44,8 +44,9 @@ typedef struct {
 KHASH_MAP_INIT_INT64(cache, cache_t)
 
 #if defined(_WIN32) || defined(_MSC_VER)
-#define ftello(fp) ftell(fp)
-#define fseeko(fp, offset, whence) fseek(fp, offset, whence)
+//assume 64-bit file pointers
+#define ftello _ftelli64
+#define fseeko _fseeki64
 #else
 extern off_t ftello(FILE *stream);
 extern int fseeko(FILE *stream, off_t offset, int whence);
@@ -362,7 +363,7 @@ deflate_block(BGZF* fp, int block_length)
             return -1;
         }
         memcpy(fp->uncompressed_block,
-               (unsigned char *)fp->uncompressed_block + input_length,
+               (uint8_t*)fp->uncompressed_block + input_length,
                remaining);
     }
     fp->block_offset = remaining;
