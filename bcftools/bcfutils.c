@@ -354,7 +354,7 @@ int bcf_gl10(const bcf1_t *b, uint8_t *gl)
 	for (k = 0; k < 4; ++k)
 		if (map[k] < 0) map[k] = k1;
 	for (i = 0; i < b->n_smpl; ++i) {
-		const uint8_t *p = PL->data + i * PL->len; // the PL for the i-th individual
+		const uint8_t *p = (const uint8_t *)PL->data + i * PL->len; // the PL for the i-th individual
 		uint8_t *g = gl + 10 * i;
 		for (k = j = 0; k < 4; ++k) {
 			for (l = k; l < 4; ++l) {
@@ -377,7 +377,7 @@ int bcf_gl10_indel(const bcf1_t *b, uint8_t *gl)
 	if (i == b->n_gi) return -1; // no PL
 	PL = b->gi + i;
 	for (i = 0; i < b->n_smpl; ++i) {
-		const uint8_t *p = PL->data + i * PL->len; // the PL for the i-th individual
+		const uint8_t *p = (const uint8_t *)PL->data + i * PL->len; // the PL for the i-th individual
 		uint8_t *g = gl + 10 * i;
 		for (k = j = 0; k < 4; ++k) {
 			for (l = k; l < 4; ++l) {
