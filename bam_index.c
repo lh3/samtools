@@ -318,7 +318,55 @@ void bam_index_save(const bam_index_t *idx, FILE *fp)
 	fflush(fp);
 }
 
-static bam_index_t *bam_index_load_core(FILE *fp)
+typedef size_t (*index_read_f)(void *ptr, size_t size, size_t nmemb, void *fp);
+
+#ifdef KNETFILE_HOOKS
+// Use buffered knetfile I/O instead of saving index file to local directory.
+#define KNETBUFSIZE (1024 * 1024)
+struct knet_buf {
+	knetFile *fp;                     // knetFile (may belong to knet_alt_* hooks)
+	int offset;                       // offset of first buffered byte that has not been read
+	int len;                          // number of unread buffered bytes
+	unsigned char eof;                // set to 1 when we knet_read fewer bytes than expected
+	unsigned char buf[KNETBUFSIZE];
+};
+
+struct knet_buf *knet_buf_new(knetFile *fp)
+{
+	struct knet_buf *kb = (struct knet_buf *)malloc(sizeof(struct knet_buf));
+	kb->fp = fp;
+	kb->offset = kb->len = kb->eof = 0;
+	memset(&(kb->buf[0]), 0, KNETBUFSIZE);
+	return kb;
+}
+
+size_t index_knet_read(void *ptr, size_t size, size_t nmemb, void *fp)
+{
+	struct knet_buf *kb = fp;
+	size_t remaining = (size * nmemb);
+	while (remaining > 0) {
+		if (kb->len > 0) {
+			size_t count = (kb->len < remaining) ? kb->len : remaining;
+			memcpy(ptr, kb->buf+kb->offset, count);
+			ptr += count;
+			kb->offset += count;
+			kb->len -= count;
+			remaining -= count;
+		}
+		if (kb->eof)
+			break;
+		if (remaining > 0) {
+			kb->len = knet_read(kb->fp, kb->buf, KNETBUFSIZE);
+			kb->offset = 0;
+			if (kb->len < KNETBUFSIZE)
+				kb->eof = 1;
+		}
+	}
+	return ((size * nmemb) - remaining) / size;
+}
+#endif
+
+static bam_index_t *bam_index_load_core(void *fp, index_read_f index_read)
 {
 	int i;
 	char magic[4];
@@ -327,14 +375,13 @@ static bam_index_t *bam_index_load_core(FILE *fp)
 		fprintf(stderr, "[bam_index_load_core] fail to load index.\n");
 		return 0;
 	}
-	fread(magic, 1, 4, fp);
+	index_read(magic, 1, 4, fp);
 	if (strncmp(magic, "BAI\1", 4)) {
 		fprintf(stderr, "[bam_index_load] wrong magic number.\n");
-		fclose(fp);
 		return 0;
 	}
 	idx = (bam_index_t*)calloc(1, sizeof(bam_index_t));	
-	fread(&idx->n, 4, 1, fp);
+	index_read(&idx->n, 4, 1, fp);
 	if (bam_is_be) bam_swap_endian_4p(&idx->n);
 	idx->index = (khash_t(i)**)calloc(idx->n, sizeof(void*));
 	idx->index2 = (bam_lidx_t*)calloc(idx->n, sizeof(bam_lidx_t));
@@ -347,18 +394,18 @@ static bam_index_t *bam_index_load_core(FILE *fp)
 		bam_binlist_t *p;
 		index = idx->index[i] = kh_init(i);
 		// load binning index
-		fread(&size, 4, 1, fp);
+		index_read(&size, 4, 1, fp);
 		if (bam_is_be) bam_swap_endian_4p(&size);
 		for (j = 0; j < (int)size; ++j) {
-			fread(&key, 4, 1, fp);
+			index_read(&key, 4, 1, fp);
 			if (bam_is_be) bam_swap_endian_4p(&key);
 			k = kh_put(i, index, key, &ret);
 			p = &kh_value(index, k);
-			fread(&p->n, 4, 1, fp);
+			index_read(&p->n, 4, 1, fp);
 			if (bam_is_be) bam_swap_endian_4p(&p->n);
 			p->m = p->n;
 			p->list = (pair64_t*)malloc(p->m * 16);
-			fread(p->list, 16, p->n, fp);
+			index_read(p->list, 16, p->n, fp);
 			if (bam_is_be) {
 				int x;
 				for (x = 0; x < p->n; ++x) {
@@ -368,15 +415,15 @@ static bam_index_t *bam_index_load_core(FILE *fp)
 			}
 		}
 		// load linear index
-		fread(&index2->n, 4, 1, fp);
+		index_read(&index2->n, 4, 1, fp);
 		if (bam_is_be) bam_swap_endian_4p(&index2->n);
 		index2->m = index2->n;
 		index2->offset = (uint64_t*)calloc(index2->m, 8);
-		fread(index2->offset, index2->n, 8, fp);
+		index_read(index2->offset, 8, index2->n, fp);
 		if (bam_is_be)
 			for (j = 0; j < index2->n; ++j) bam_swap_endian_8p(&index2->offset[j]);
 	}
-	if (fread(&idx->n_no_coor, 8, 1, fp) == 0) idx->n_no_coor = 0;
+	if (index_read(&idx->n_no_coor, 8, 1, fp) == 0) idx->n_no_coor = 0;
 	if (bam_is_be) bam_swap_endian_8p(&idx->n_no_coor);
 	return idx;
 }
@@ -406,12 +453,13 @@ bam_index_t *bam_index_load_local(const char *_fn)
 	}
 	free(fnidx); free(fn);
 	if (fp) {
-		bam_index_t *idx = bam_index_load_core(fp);
+		bam_index_t *idx = bam_index_load_core(fp, (index_read_f)fread);
 		fclose(fp);
 		return idx;
 	} else return 0;
 }
 
+#ifndef KNETFILE_HOOKS
 #ifdef _USE_KNETFILE
 static void download_from_remote(const char *url)
 {
@@ -449,10 +497,39 @@ static void download_from_remote(const char *url)
 	return;
 }
 #endif
+#endif
 
 bam_index_t *bam_index_load(const char *fn)
 {
 	bam_index_t *idx;
+#if (defined _USE_KNETFILE && defined KNETFILE_HOOKS)
+	if (strstr(fn, "ftp://") == fn || strstr(fn, "http://") == fn ||
+		strstr(fn, "https://") == fn) {
+		knetFile *fp;
+		struct knet_buf *kb;
+		size_t len = strlen(fn);
+		char *fnidx = (char*)calloc(len + 5, 1);
+		strcpy(fnidx, fn); strcat(fnidx, ".bai");
+		fp = knet_open(fnidx, "r");
+		if (fp == NULL && !strcmp(fn+len-4, ".bam")) {
+			char *fnidx2 = (char*)calloc(len, 1);
+			strcpy(fnidx2, fn);
+			strncpy(fnidx2+len-4, ".bai", 5);
+			fp = knet_open(fnidx2, "r");
+			if (fp == NULL) {
+			fprintf(stderr, "Unable to open index file for %s.  Tried %s and %s.",
+				fn, fnidx, fnidx2);
+			return NULL;
+			}
+		}
+		kb = knet_buf_new(fp);
+		idx = bam_index_load_core(kb, index_knet_read);
+		knet_close(fp);
+		free(kb);
+	} else {
+		idx =  bam_index_load_local(fn);
+	}
+#else
 	idx = bam_index_load_local(fn);
 	if (idx == 0 && (strstr(fn, "ftp://") == fn || strstr(fn, "http://") == fn)) {
 		char *fnidx = calloc(strlen(fn) + 5, 1);
@@ -461,6 +538,7 @@ bam_index_t *bam_index_load(const char *fn)
 		download_from_remote(fnidx);
 		idx = bam_index_load_local(fn);
 	}
+#endif
 	if (idx == 0) fprintf(stderr, "[bam_index_load] fail to load BAM index.\n");
 	return idx;
 }

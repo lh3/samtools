@@ -44,6 +44,63 @@
 #endif
 
 #include "knetfile.h"
+#include <stdint.h>
+#include <fcntl.h>
+
+#ifndef _WIN32
+#define netread(fd, ptr, len) read(fd, ptr, len)
+#define netwrite(fd, ptr, len) write(fd, ptr, len)
+#define netclose(fd) close(fd)
+#else
+#include <winsock2.h>
+#define netread(fd, ptr, len) recv(fd, ptr, len, 0)
+#define netwrite(fd, ptr, len) send(fd, ptr, len, 0)
+#define netclose(fd) closesocket(fd)
+#endif
+
+// FIXME: currently I/O is unbuffered
+
+#define KNF_TYPE_LOCAL 1
+#define KNF_TYPE_FTP   2
+#define KNF_TYPE_HTTP  3
+
+#ifdef KNETFILE_HOOKS
+// Static global function pointers that may be set by knet_init_alt()
+// to replace the usual knet functionality with alternate I/O implementation.
+static knet_alt_open_f alt_open = NULL;
+static knet_alt_dopen_f alt_dopen = NULL;
+static knet_alt_read_f alt_read = NULL;
+static knet_alt_seek_f alt_seek = NULL;
+static knet_alt_tell_f alt_tell = NULL;
+static knet_alt_close_f alt_close = NULL;
+
+void knet_init_alt(knet_alt_open_f open, knet_alt_dopen_f dopen, knet_alt_read_f read,
+				   knet_alt_seek_f seek, knet_alt_tell_f tell, knet_alt_close_f close)
+{
+	alt_open = open;
+	alt_dopen = dopen;
+	alt_read = read;
+	alt_seek = seek;
+	alt_tell = tell;
+	alt_close = close;
+}
+#endif
+
+struct knetFile_s {
+	int type, fd;
+	int64_t offset;
+	char *host, *port;
+
+	// the following are for FTP only
+	int ctrl_fd, pasv_ip[4], pasv_port, max_response, no_reconnect, is_ready;
+	char *response, *retr, *size_cmd;
+	int64_t seek_offset; // for lazy seek
+	int64_t file_size;
+
+	// the following are for HTTP only
+	char *path, *http_host;
+}; // typedef'd to knetFile in knetfile.h
+
 
 /* In winsock.h, the type of a socket is SOCKET, which is: "typedef
  * u_int SOCKET". An invalid SOCKET is: "(SOCKET)(~0)", or signed
@@ -85,6 +142,7 @@ static int socket_wait(int fd, int is_read)
  * Guide to Network Programming" (http://beej.us/guide/bgnet/). */
 static int socket_connect(const char *host, const char *port)
 {
+#define __err_connect_no_res(func) do { perror(func); return -1; } while (0)
 #define __err_connect(func) do { perror(func); freeaddrinfo(res); return -1; } while (0)
 
 	int on = 1, fd;
@@ -95,7 +153,7 @@ static int socket_connect(const char *host, const char *port)
 	hints.ai_socktype = SOCK_STREAM;
 	/* In Unix/Mac, getaddrinfo() is the most convenient way to get
 	 * server information. */
-	if (getaddrinfo(host, port, &hints, &res) != 0) __err_connect("getaddrinfo");
+	if (getaddrinfo(host, port, &hints, &res) != 0) __err_connect_no_res("getaddrinfo");
 	if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1) __err_connect("socket");
 	/* The following two setsockopt() are used by ftplib
 	 * (http://nbpfaus.net/~pfau/ftplib/). I am not sure if they
@@ -450,6 +508,10 @@ int khttp_connect_file(knetFile *fp)
 
 knetFile *knet_open(const char *fn, const char *mode)
 {
+#ifdef KNETFILE_HOOKS
+	if (alt_open)
+		return alt_open(fn, mode);
+#endif
 	knetFile *fp = 0;
 	if (mode[0] != 'r') {
 		fprintf(stderr, "[kftp_open] only mode \"r\" is supported.\n");
@@ -494,6 +556,10 @@ knetFile *knet_open(const char *fn, const char *mode)
 
 knetFile *knet_dopen(int fd, const char *mode)
 {
+#ifdef KNETFILE_HOOKS
+	if (alt_dopen)
+		return alt_dopen(fd, mode);
+#endif
 	knetFile *fp = (knetFile*)calloc(1, sizeof(knetFile));
 	fp->type = KNF_TYPE_LOCAL;
 	fp->fd = fd;
@@ -502,6 +568,10 @@ knetFile *knet_dopen(int fd, const char *mode)
 
 off_t knet_read(knetFile *fp, void *buf, off_t len)
 {
+#ifdef KNETFILE_HOOKS
+	if (alt_read)
+		return alt_read(fp, buf, len);
+#endif
 	off_t l = 0;
 	if (fp->fd == -1) return 0;
 	if (fp->type == KNF_TYPE_FTP) {
@@ -530,6 +600,10 @@ off_t knet_read(knetFile *fp, void *buf, off_t len)
 
 off_t knet_seek(knetFile *fp, int64_t off, int whence)
 {
+#ifdef KNETFILE_HOOKS
+	if (alt_seek)
+		return alt_seek(fp, off, whence);
+#endif
 	if (whence == SEEK_SET && off == fp->offset) return 0;
 	if (fp->type == KNF_TYPE_LOCAL) {
 		/* Be aware that lseek() returns the offset after seeking,
@@ -573,8 +647,21 @@ off_t knet_seek(knetFile *fp, int64_t off, int whence)
 	return -1;
 }
 
+off_t knet_tell(knetFile *fp)
+{
+#ifdef KNETFILE_HOOKS
+	if (alt_tell)
+		return alt_tell(fp);
+#endif
+	return fp->offset;
+}
+
 int knet_close(knetFile *fp)
 {
+#ifdef KNETFILE_HOOKS
+	if (alt_close)
+		return alt_close(fp);
+#endif
 	if (fp == 0) return 0;
 	if (fp->ctrl_fd != -1) netclose(fp->ctrl_fd); // FTP specific
 	if (fp->fd != -1) {
