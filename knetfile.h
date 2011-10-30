@@ -1,43 +1,20 @@
 #ifndef KNETFILE_H
 #define KNETFILE_H
 
-#include <stdint.h>
-#include <fcntl.h>
+typedef struct knetFile_s knetFile;
 
-#ifndef _WIN32
-#define netread(fd, ptr, len) read(fd, ptr, len)
-#define netwrite(fd, ptr, len) write(fd, ptr, len)
-#define netclose(fd) close(fd)
-#else
-#include <winsock2.h>
-#define netread(fd, ptr, len) recv(fd, ptr, len, 0)
-#define netwrite(fd, ptr, len) send(fd, ptr, len, 0)
-#define netclose(fd) closesocket(fd)
-#endif
-
-// FIXME: currently I/O is unbuffered
-
-#define KNF_TYPE_LOCAL 1
-#define KNF_TYPE_FTP   2
-#define KNF_TYPE_HTTP  3
-
-typedef struct knetFile_s {
-	int type, fd;
-	int64_t offset;
-	char *host, *port;
-
-	// the following are for FTP only
-	int ctrl_fd, pasv_ip[4], pasv_port, max_response, no_reconnect, is_ready;
-	char *response, *retr, *size_cmd;
-	int64_t seek_offset; // for lazy seek
-    int64_t file_size;
-
-	// the following are for HTTP only
-	char *path, *http_host;
-} knetFile;
-
-#define knet_tell(fp) ((fp)->offset)
+#ifdef KNETFILE_HOOKS
+// the following allow knetfile to wrap an alternate I/O library
+typedef knetFile *(*knet_alt_open_f)(const char *fn, const char *mode);
+typedef knetFile *(*knet_alt_dopen_f)(int fd, const char *mode);
+typedef off_t (*knet_alt_read_f)(knetFile *fp, void *buf, off_t len);
+typedef off_t (*knet_alt_seek_f)(knetFile *fp, int64_t off, int whence);
+typedef off_t (*knet_alt_tell_f)(knetFile *fp);
+typedef int (*knet_alt_close_f)(knetFile *fp);
+#else 
+// As of 2/18/2010 this is not used anywhere in samtools, and would not play well with abstraction:
 #define knet_fileno(fp) ((fp)->fd)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +26,11 @@ extern "C" {
 #endif
 
 	knetFile *knet_open(const char *fn, const char *mode);
+
+#ifdef KNETFILE_HOOKS
+	void knet_init_alt(knet_alt_open_f open, knet_alt_dopen_f dopen, knet_alt_read_f read,
+					   knet_alt_seek_f seek, knet_alt_tell_f tell, knet_alt_close_f close);
+#endif
 
 	/* 
 	   This only works with local files.
@@ -66,6 +48,7 @@ extern "C" {
 	  communicate with the FTP server.
 	 */
 	off_t knet_seek(knetFile *fp, int64_t off, int whence);
+	off_t knet_tell(knetFile *fp);
 	int knet_close(knetFile *fp);
 
 #ifdef __cplusplus

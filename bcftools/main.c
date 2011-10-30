@@ -28,7 +28,7 @@ int bcf_cat(int n, char * const *fn)
 		h = bcf_hdr_read(in);
 		if (i == 0) bcf_hdr_write(out, h);
 		bcf_hdr_destroy(h);
-#ifdef _USE_KNETFILE
+#if (defined _USE_KNETFILE && !defined KNETFILE_HOOKS)
 		fstat(knet_fileno(in->fp->x.fpr), &s);
 		end = s.st_size - 28;
 		while (knet_tell(in->fp->x.fpr) < end) {
@@ -37,6 +37,7 @@ int bcf_cat(int n, char * const *fn)
 			fwrite(buf, 1, size, out->fp->x.fpw);
 		}
 #else
+		fprintf(stderr, "Sorry, bcftools cat is not implemented unless compiled with _USE_KNETFILE without KNETFILE_HOOKS\n");
 		abort(); // FIXME: not implemented
 #endif
 		bcf_close(in);
