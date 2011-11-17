@@ -628,7 +628,7 @@ int bgzf_close(BGZF* fp)
         if (bgzf_flush(fp) != 0) return -1;
 		{ // add an empty block
 			// add 28 bytes EOF empty block
-			fp->compress_level=-1; //don't need original value again
+			fp->compress_level=Z_DEFAULT_COMPRESSION; //don't need value again
 			// (different compression levels would give different empty blocks)
 			int count, block_length = deflate_block(fp, 0);
 #ifdef _USE_KNETFILE
