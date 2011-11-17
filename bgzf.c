@@ -626,14 +626,24 @@ int bgzf_close(BGZF* fp)
 {
     if (fp->open_mode == 'w') {
         if (bgzf_flush(fp) != 0) return -1;
-		{ // add an empty block
+        if (fp->compress_level==0) {
+		// add 28 byes EOF empty block even if no compression
+		// (gzip no compresison would give block size 32 bytes)
+	        //fprintf(stderr, "[bgzf_close] Forcing empty EOF block\n");
+		int count;
+#ifdef _USE_KNETFILE
+		count = fwrite("\037\213\010\4\0\0\0\0\0\377\6\0\102\103\2\0\033\0\3\0\0\0\0\0\0\0\0\0", 1, 28, fp->x.fpw);
+#else
+		count = fwrite("\037\213\010\4\0\0\0\0\0\377\6\0\102\103\2\0\033\0\3\0\0\0\0\0\0\0\0\0", 1, 28, fp->file);
+#endif
+	} else { // add an empty block
 			int count, block_length = deflate_block(fp, 0);
 #ifdef _USE_KNETFILE
 			count = fwrite(fp->compressed_block, 1, block_length, fp->x.fpw);
 #else
 			count = fwrite(fp->compressed_block, 1, block_length, fp->file);
 #endif
-		}
+	}
 #ifdef _USE_KNETFILE
         if (fflush(fp->x.fpw) != 0) {
 #else
