@@ -20,7 +20,7 @@ uint32_t bam_calend(const bam1_core_t *c, const uint32_t *cigar)
 	end = c->pos;
 	for (k = 0; k < c->n_cigar; ++k) {
 		int op = cigar[k] & BAM_CIGAR_MASK;
-		if (op == BAM_CMATCH || op == BAM_CDEL || op == BAM_CREF_SKIP)
+		if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF || op == BAM_CDEL || op == BAM_CREF_SKIP)
 			end += cigar[k] >> BAM_CIGAR_SHIFT;
 	}
 	return end;
