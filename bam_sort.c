@@ -308,18 +308,20 @@ static inline int bam1_lt(const bam1_p a, const bam1_p b)
 }
 KSORT_INIT(sort, bam1_p, bam1_lt)
 
-static void sort_blocks(int n, int k, bam1_p *buf, const char *prefix, const bam_header_t *h, int is_stdout)
+static void sort_blocks(int n, int k, bam1_p *buf, const char *prefix, const bam_header_t *h, int is_stdout, int full_path)
 {
 	char *name, mode[3];
 	int i;
 	bamFile fp;
+    char const * suffix = ".bam";
+    if (full_path) suffix += 4;
 	ks_mergesort(sort, k, buf, 0);
 	name = (char*)calloc(strlen(prefix) + 20, 1);
 	if (n >= 0) {
-		sprintf(name, "%s.%.4d.bam", prefix, n);
+        sprintf(name, "%s.%.4d%s", prefix, n, suffix);
 		strcpy(mode, "w1");
 	} else {
-		sprintf(name, "%s.bam", prefix);
+		sprintf(name, "%s%s", prefix, suffix);
 		strcpy(mode, "w");
 	}
 	fp = is_stdout? bam_dopen(fileno(stdout), mode) : bam_open(name, mode);
@@ -345,19 +347,22 @@ static void sort_blocks(int n, int k, bam1_p *buf, const char *prefix, const bam
   @param  prefix   prefix of the output and the temporary files; upon
 	                   sucessess, prefix.bam will be written.
   @param  max_mem  approxiate maximum memory (very inaccurate)
+  @param  full_path whether the given path is the full path and not just the prefix.
 
   @discussion It may create multiple temporary subalignment files
   and then merge them by calling bam_merge_core(). This function is
   NOT thread safe.
  */
-void bam_sort_core_ext(int is_by_qname, const char *fn, const char *prefix, size_t max_mem, int is_stdout)
+void bam_sort_core_ext(int is_by_qname, const char *fn, const char *prefix, size_t max_mem, int is_stdout, int full_path)
 {
 	int n, ret, k, i;
 	size_t mem;
 	bam_header_t *header;
 	bamFile fp;
 	bam1_t *b, **buf;
-
+    char const * suffix = ".bam";
+    if (full_path) suffix += 4;
+    
 	g_is_by_qname = is_by_qname;
 	n = k = 0; mem = 0;
 	fp = strcmp(fn, "-")? bam_open(fn, "r") : bam_dopen(fileno(stdin), "r");
@@ -375,20 +380,20 @@ void bam_sort_core_ext(int is_by_qname, const char *fn, const char *prefix, size
 		mem += ret;
 		++k;
 		if (mem >= max_mem) {
-			sort_blocks(n++, k, buf, prefix, header, 0);
+			sort_blocks(n++, k, buf, prefix, header, 0, full_path);
 			mem = 0; k = 0;
 		}
 	}
 	if (ret != -1)
 		fprintf(stderr, "[bam_sort_core] truncated file. Continue anyway.\n");
-	if (n == 0) sort_blocks(-1, k, buf, prefix, header, is_stdout);
+	if (n == 0) sort_blocks(-1, k, buf, prefix, header, is_stdout, full_path);
 	else { // then merge
 		char **fns, *fnout;
 		fprintf(stderr, "[bam_sort_core] merging from %d files...\n", n+1);
-		sort_blocks(n++, k, buf, prefix, header, 0);
+		sort_blocks(n++, k, buf, prefix, header, 0, full_path);
 		fnout = (char*)calloc(strlen(prefix) + 20, 1);
 		if (is_stdout) sprintf(fnout, "-");
-		else sprintf(fnout, "%s.bam", prefix);
+		sprintf(fnout, "%s%s", prefix, suffix);
 		fns = (char**)calloc(n, sizeof(char*));
 		for (i = 0; i < n; ++i) {
 			fns[i] = (char*)calloc(strlen(prefix) + 20, 1);
@@ -415,7 +420,7 @@ void bam_sort_core_ext(int is_by_qname, const char *fn, const char *prefix, size
 
 void bam_sort_core(int is_by_qname, const char *fn, const char *prefix, size_t max_mem)
 {
-	bam_sort_core_ext(is_by_qname, fn, prefix, max_mem, 0);
+	bam_sort_core_ext(is_by_qname, fn, prefix, max_mem, 0, 0);
 }
 
 
@@ -446,18 +451,19 @@ size_t bam_sort_get_max_mem(char *max_mem_string)
 int bam_sort(int argc, char *argv[])
 {
 	size_t max_mem = 500000000;
-	int c, is_by_qname = 0, is_stdout = 0;
-	while ((c = getopt(argc, argv, "nom:")) >= 0) {
+	int c, is_by_qname = 0, is_stdout = 0, full_path = 0;
+	while ((c = getopt(argc, argv, "fnom:")) >= 0) {
 		switch (c) {
+		case 'f': full_path = 1; break;
 		case 'o': is_stdout = 1; break;
 		case 'n': is_by_qname = 1; break;
 		case 'm': max_mem = bam_sort_get_max_mem(optarg); break;
 		}
 	}
 	if (optind + 2 > argc) {
-		fprintf(stderr, "Usage: samtools sort [-on] [-m <maxMem>] <in.bam> <out.prefix>\n");
+		fprintf(stderr, "Usage: samtools sort [-onf] [-m <maxMem>] <in.bam> <out.prefix>\n");
 		return 1;
 	}
-	bam_sort_core_ext(is_by_qname, argv[optind], argv[optind+1], max_mem, is_stdout);
+	bam_sort_core_ext(is_by_qname, argv[optind], argv[optind+1], max_mem, is_stdout, full_path);
 	return 0;
 }
