@@ -105,14 +105,14 @@ int main_depth(int argc, char *argv[])
 	n_plp = calloc(n, sizeof(int)); // n_plp[i] is the number of covering reads from the i-th BAM
 	plp = calloc(n, sizeof(void*)); // plp[i] points to the array of covering reads (internal in mplp)
 	while (bam_mplp_auto(mplp, &tid, &pos, n_plp, plp) > 0) { // come to the next covered position
-                int32_t cov = 0;
+		int32_t cov = 0;
 		if (pos < beg || pos >= end) continue; // out of range; skip
 		if (bed && bed_overlap(bed, h->target_name[tid], pos, pos + 1) == 0) continue; // not in BED; skip
-                if (0 == use_circos) { fputs(h->target_name[tid], stdout); printf("\t%d", pos+1); } // a customized printf() would be faster
-                for (i = 0; i < n; ++i) { // base level filters have to go here
-                    int j, m = 0;
-                    for (j = 0; j < n_plp[i]; ++j) {
-                        const bam_pileup1_t *p = plp[i] + j; // DON'T modfity plp[][] unless you really know
+		if (0 == use_circos) { fputs(h->target_name[tid], stdout); printf("\t%d", pos+1); } // a customized printf() would be faster
+		for (i = 0; i < n; ++i) { // base level filters have to go here
+			int j, m = 0;
+			for (j = 0; j < n_plp[i]; ++j) {
+				const bam_pileup1_t *p = plp[i] + j; // DON'T modfity plp[][] unless you really know
                         if (p->is_del || p->is_refskip) ++m; // having dels or refskips at tid:pos
                         else if (bam1_qual(p->b)[p->qpos] < baseQ) ++m; // low base quality
                     }
