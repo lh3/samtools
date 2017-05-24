@@ -84,6 +84,7 @@ bam_header_t *bam_header_read(bamFile fp)
 	char buf[4];
 	int magic_len;
 	int32_t i = 1, name_len;
+#if 0
 	// check EOF
 	i = bgzf_check_EOF(fp);
 	if (i < 0) {
@@ -92,6 +93,7 @@ bam_header_t *bam_header_read(bamFile fp)
 		if (errno != ESPIPE) perror("[bam_header_read] bgzf_check_EOF");
 	}
 	else if (i == 0) fprintf(stderr, "[bam_header_read] EOF marker is absent. The input is probably truncated.\n");
+#endif
 	// read "BAM1"
 	magic_len = bam_read(fp, buf, 4);
 	if (magic_len != 4 || strncmp(buf, "BAM\001", 4) != 0) {
