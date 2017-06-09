@@ -14,7 +14,7 @@ sub main {
   my $command = shift(@ARGV);
   my %func = (subsam=>\&subsam, listsam=>\&listsam, fillac=>\&fillac, qstats=>\&qstats, varFilter=>\&varFilter,
 			  hapmap2vcf=>\&hapmap2vcf, ucscsnp2vcf=>\&ucscsnp2vcf, filter4vcf=>\&varFilter, ldstats=>\&ldstats,
-			  gapstats=>\&gapstats, splitchr=>\&splitchr, vcf2fq=>\&vcf2fq);
+			  gapstats=>\&gapstats, splitchr=>\&splitchr, vcf2fq=>\&vcf2fq, usage=>\&usage);
   die("Unknown command \"$command\".\n") if (!defined($func{$command}));
   &{$func{$command}};
 }
